@@ -9,7 +9,10 @@ use warnings;
 
 require Exporter;
 our @ISA       = qw(Exporter);
-our @EXPORT_OK = qw(create_color_theme_transform);
+our @EXPORT_OK = qw(
+                       create_color_theme_transform
+                       get_color_theme
+               );
 
 sub create_color_theme_transform {
     my ($basect, $func) = @_;
@@ -46,12 +49,51 @@ sub create_color_theme_transform {
     $derivedct;
 }
 
+sub get_color_theme {
+    no strict 'refs';
+
+    my $opts  = ref($_[0]) eq 'HASH' ? shift : {};
+    my $name0 = shift;
+
+    my $modprefixes    = $opts->{module_prefixes} // ["Generic::ColorTheme"];
+    my $themeprefixes0 = $opts->{theme_prefixes}  // ["Default"];
+
+    my (@themeprefixes, $name);
+    if ($name0 =~ /(.+)::(.+)/) {
+        @themeprefixes = ($1);
+        $name = $2;
+    } else {
+        @themeprefixes = @$themeprefixes0;
+        $name = $name0;
+    }
+
+    my @searched_mods;
+    for my $modprefix (@$modprefixes) {
+        for my $themeprefix (@themeprefixes) {
+            my $mod = "$modprefix\::$themeprefix";
+            push @searched_mods, $mod;
+            (my $mod_pm = "$mod.pm") =~ s!::!/!g;
+            if (eval { require $mod_pm; 1 }) {
+                my $color_themes = \%{"$mod\::color_themes"};
+                return $color_themes->{$name} if $color_themes->{$name};
+            }
+        }
+    }
+    die "Can't find color theme '$name0' (searched in ".
+        join(", ", @searched_mods).")";
+}
+
 1;
 # ABSTRACT: Utility routines related to color themes
 
+=head1 SYNOPSIS
+
+
 =head1 FUNCTIONS
 
-=head2 create_color_theme_transform($basect, $func) => HASH
+=head2 create_color_theme_transform
+
+Usage: create_color_theme_transform($basect, $func) => hash
 
 Create a new color theme by applying transform function C<$func> (code) to base
 theme C<$basetheme> (hash). For example if you want to create a reddish
@@ -68,6 +110,24 @@ L<Text::ANSITable> color theme from the default theme:
  # use the color theme
  my $t = Text::ANSITable->new;
  $t->color_theme($redtheme);
+
+=head2 get_color_theme
+
+Usage: get_color_name([ \%opts ], $name)
+
+Get color theme structure. Options:
+
+=over
+
+=item * module_prefixes => array
+
+Default: C<< ["Generic::ColorTheme"] >>.
+
+=item * theme_prefixes => array
+
+Default: C<< ["Default"] >>.
+
+=back
 
 
 =head1 SEE ALSO
